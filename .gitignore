@@ -1,0 +1,11 @@
+# PlatformIO — cache et binaires de compilation (peut dépasser 200 Mo)
+.pio/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
