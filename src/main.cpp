@@ -1,21 +1,24 @@
 #include <Arduino.h>
 
-// TP Validation Electronique — Ynov
-// Modifie uniquement ce fichier
+#define LED_GREEN 2   // CMD_LED_GREEN
+#define LED_RED   16  // CMD_LED_RED
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
   Serial.begin(115200);
-  Serial.println("BOOT OK — pret");
+  Serial.println("BOOT OK");
 }
 
 void loop() {
-  // TODO : écris ton code ici
-  digitalWrite(LED_BUILTIN, HIGH);
-  Serial.println("LED ON");
-  delay(1000);
+  digitalWrite(LED_GREEN, HIGH);
+  Serial.println("LED GREEN ON");
+  delay(500);
 
-  digitalWrite(LED_BUILTIN, LOW);
-  Serial.println("LED OFF");
-  delay(1000);
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_RED, HIGH);
+  Serial.println("LED RED ON");
+  delay(500);
+
+  digitalWrite(LED_RED, LOW);
 }
