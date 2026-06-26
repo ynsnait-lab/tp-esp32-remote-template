@@ -4,6 +4,39 @@ Un module = un bloc de la carte. Pour chaque fichier `src/` : **en clair** (à q
 ça sert) + **données clés** (les chiffres importants). Lecture rapide avant de
 plonger dans le code.
 
+## Architecture des modules
+
+```mermaid
+flowchart TD
+    main["main.cpp<br/>orchestre le bring-up"]
+    hmi["hmi<br/>LED + buzzer (PWM)"]
+    temp["temperature<br/>supervise 3 sources"]
+    ina["ina237<br/>courant (I2C)"]
+    mem["mem<br/>flash + PSRAM"]
+    tmp["tmp126<br/>température (SPI)"]
+    ntc["ntc<br/>2x CTN (ADC)"]
+    pins["pins.h<br/>mapping broches — partagé"]
+
+    main --> hmi
+    main --> temp
+    main --> ina
+    main --> mem
+    temp --> tmp
+    temp --> ntc
+    ina -. "T° die" .-> temp
+    pins -.-> hmi
+    pins -.-> ina
+    pins -.-> tmp
+    pins -.-> ntc
+
+    classDef shared fill:#FCEFC7,stroke:#B7791F,color:#7B341E;
+    class pins shared;
+```
+
+- **Flèche pleine** = appelle / pilote · **flèche pointillée** = fournit une donnée ou des broches.
+- `temperature` est le seul module qui en coordonne d'autres (`tmp126`, `ntc`) et recoupe la T° die de `ina237`.
+- `pins.h` (ressource partagée) fournit le mapping des broches aux modules matériels.
+
 ---
 
 ### 🎬 `main.cpp` — le chef d'orchestre
