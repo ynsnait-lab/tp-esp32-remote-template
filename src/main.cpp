@@ -111,6 +111,18 @@ void setup() {
 //  seuils, et signale toute alarme sur l'IHM (LED + buzzer). Suit la FSM.
 // =============================================================================
 void loop() {
+  // --- Commande serie : "dump" -> restitue l'historique des temperatures (Ref #14)
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "dump") {
+      Serial.printf("HIST,%u\n", (unsigned)histTemp.size());
+      for (size_t i = 0; i < histTemp.size(); i++) {
+        Serial.printf("H,%u,%.2f\n", (unsigned)i, histTemp.at(i));
+      }
+    }
+  }
+
   // --- Mesures ---
   float tC   = temperature::tmp.temperature();  // TMP126 (degC)
   float tNtc = ntc::readCelsius1();             // CTN 1 ambiante (degC) - NAN si hors plage
