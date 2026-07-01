@@ -1,0 +1,147 @@
+# Guide du code — firmware de validation (vulgarisation)
+
+Un module = un bloc de la carte. Pour chaque fichier `src/` : **en clair** (à quoi
+ça sert) + **données clés** (les chiffres importants). Lecture rapide avant de
+plonger dans le code.
+
+## Architecture des modules
+
+```mermaid
+flowchart TD
+    main["main.cpp<br/>orchestre le bring-up"]
+    hmi["hmi<br/>LED + buzzer (PWM)"]
+    temp["temperature<br/>supervise 3 sources"]
+    ina["ina237<br/>courant (I2C)"]
+    mem["mem<br/>flash + PSRAM"]
+    tmp["tmp126<br/>température (SPI)"]
+    ntc["ntc<br/>2x CTN (ADC)"]
+    pins["pins.h<br/>mapping broches — partagé"]
+
+    main --> hmi
+    main --> temp
+    main --> ina
+    main --> mem
+    temp --> tmp
+    temp --> ntc
+    ina -. "T° die" .-> temp
+    pins -.-> hmi
+    pins -.-> ina
+    pins -.-> tmp
+    pins -.-> ntc
+
+    classDef shared fill:#FCEFC7,stroke:#B7791F,color:#7B341E;
+    class pins shared;
+```
+
+- **Flèche pleine** = appelle / pilote · **flèche pointillée** = fournit une donnée ou des broches.
+- `temperature` est le seul module qui en coordonne d'autres (`tmp126`, `ntc`) et recoupe la T° die de `ina237`.
+- `pins.h` (ressource partagée) fournit le mapping des broches aux modules matériels.
+
+---
+
+### 🎬 `main.cpp` — le chef d'orchestre
+**En clair :** au démarrage (`setup`), lance la séquence de test de tous les blocs,
+puis passe en **boucle de surveillance** (`loop`) : mesures → décision d'alarme →
+LED/buzzer → ligne de log.
+**Données clés :**
+- Liaison série **115200 bauds**
+- Bring-up : [1] HMI · [2] I²C/INA237 · [3] Température · [4] Mémoire
+- Boucle : 1 mesure/s, seuils avertissement/critique, ligne `LOG,...` en CSV
+
+---
+
+### 🗺️ `pins.h` — le plan de câblage
+**En clair :** la liste « quel composant est branché sur quelle broche de l'ESP32 ».
+Toutes les valeurs viennent du schéma de la carte.
+**Données clés :**
+- I²C : SDA **21**, SCL **22** · SPI : SCK **18**, MISO **19**, MOSI **23**, CS **5**
+- LED verte **14**, rouge **15**, buzzer **13** · CTN **26** et **25**
+
+---
+
+### 💡 `hmi.cpp` / `hmi.h` — les voyants et le bip
+**En clair :** allume les LED (verte/rouge) et fait sonner le buzzer. Sert à
+montrer visuellement/auditivement que la carte réagit.
+**Données clés :**
+- Buzzer piloté en **PWM à 4 kHz** (fréquence de résonance du buzzer Murata)
+- `selfTest()` = clignote chaque LED + un bip
+
+---
+
+### 🌡️ `ntc.cpp` / `ntc.h` — le thermomètre analogique (×2)
+**En clair :** lit les 2 sondes CTN (thermistances) sur l'entrée analogique et
+convertit la valeur brute en degrés. Plus il fait chaud, plus la résistance baisse.
+**Données clés :**
+- Sonde **NB12K00103** : 10 kΩ à 25 °C, **Beta = 3630**
+- Conversion ratiométrique : `R = 10000 × raw / (4095 − raw)`, puis formule Beta
+- ⚠️ Broches sur **ADC2** → indisponibles si Bluetooth actif
+
+---
+
+### ⚡ `ina237.cpp` / `ina237.h` — le compteur électrique
+**En clair :** mesure le courant, la tension et la température interne via le bus
+I²C. C'est le cœur du « moniteur d'énergie ».
+**Données clés :**
+- Adresse I²C **0x40** · présence : registre `0x3E` doit valoir **0x5449**
+- Résolutions : tension bus **3,125 mV**, shunt **5 µV**, température **125 m°C**
+- Courant : nécessite la valeur du shunt X500 (à confirmer)
+
+---
+
+### 🌡️ `tmp126.cpp` / `tmp126.h` — le thermomètre numérique précis
+**En clair :** capteur de température sur bus SPI, avec des alarmes (seuils haut/bas)
+qu'on programme et qu'on relit.
+**Données clés :**
+- Présence : registre `0x0C` doit valoir **0x2126**
+- Résolution **0,03125 °C** · seuils par défaut carte : bas 5 °C / haut 40 °C
+- Câblage **3 fils** (SIO via résistance de 10 kΩ)
+
+---
+
+### 🧭 `temperature.cpp` / `temperature.h` — le superviseur température
+**En clair :** rassemble les **3 thermomètres** (TMP126 + 2 CTN + puce INA237),
+les affiche et vérifie qu'ils sont d'accord entre eux (validation croisée).
+**Données clés :**
+- 3 sources comparées · alerte si **écart > 5 °C**
+- Configure aussi les alarmes du TMP126
+
+---
+
+### 🧠 `mem.cpp` / `mem.h` — l'inventaire mémoire
+**En clair :** vérifie la quantité de mémoire disponible et teste que la PSRAM
+fonctionne (écrit puis relit un bloc).
+**Données clés :**
+- Flash **4 Mo** (garde les données, mais ~**100 000** écritures max/secteur)
+- PSRAM **2 Mo** (écriture illimitée, mais **perd tout** à la coupure)
+- Test : écriture/relecture de **64 Ko** en PSRAM
+
+---
+
+### ⚖️ `alarm_logic.h` — le juge des seuils
+**En clair :** décide du niveau d'alarme (OK / avertissement / critique) en
+comparant une mesure à deux seuils. Fonction **pure** → testée sur PC.
+**Données clés :**
+- Seuils logiciels : température 40/55 °C, courant 8/10 A
+- (le TMP126 a aussi ses propres seuils matériels, 5/40 °C, relus par polling)
+
+---
+
+### 📚 `ring_buffer.h` — le carnet de mesures
+**En clair :** garde en mémoire les N dernières mesures (historique) ; quand il
+est plein, il écrase la plus ancienne. Fonction **pure** → testée sur PC.
+**Données clés :**
+- 64 dernières températures conservées en RAM, zéro allocation dynamique
+
+---
+
+### 🧾 `log_format.h` — l'écrivain du journal
+**En clair :** met en forme une ligne de log au format CSV, la même que celle
+émise sur le port série (`LOG,...`). Fonction **pure** → testée sur PC.
+**Données clés :**
+- Colonnes : `t_ms, temp_tmp126, temp_ntc1, vbus, courant, niveau`
+
+---
+
+> 📎 Références techniques détaillées : [registres.md](registres.md) (valeurs attendues
+> des capteurs) et [temperature.md](temperature.md) (sous-système température).
+> Tests unitaires : voir [../test/README.md](../test/README.md).
