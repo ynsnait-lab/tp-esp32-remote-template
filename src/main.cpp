@@ -19,6 +19,11 @@
 
 INA237 ina;
 
+// --- Seuils de surveillance (ajustables) ---
+static const float SEUIL_TEMP_C    = 35.0f;    // alarme si T depasse (degC)
+static const float SEUIL_COURANT_A = 8.0f;     // alarme si |I| depasse (A) - cf. config groupe 8000 mA
+static const float R_SHUNT_OHM     = 0.0005f;  // shunt X500 : PROVISOIRE, a confirmer
+
 static void scanI2C() {
   Serial.println("[2] I2C : scan du bus...");
   uint8_t found = 0;
@@ -73,6 +78,7 @@ void setup() {
   // [2] I2C + INA237
   scanI2C();
   float inaDie = testINA237();
+  ina.configureCurrent(/*maxCurrentA=*/10.0f, R_SHUNT_OHM);  // active la mesure de courant (R_shunt provisoire)
 
   // [3] Sous-systeme temperature (TMP126 + CTN + recoupe avec T_die INA237)
   temperature::begin();
@@ -85,7 +91,41 @@ void setup() {
   Serial.println("--- Bring-up termine ---");
 }
 
+// =============================================================================
+//  Boucle de surveillance : mesure temperature + courant/tension, compare aux
+//  seuils, et signale toute alarme sur l'IHM (LED + buzzer). Suit la FSM.
+// =============================================================================
 void loop() {
-  Serial.println("[heartbeat] alive");
-  delay(2000);
+  // --- Mesures ---
+  float tC   = temperature::tmp.temperature();  // TMP126 (degC)
+  float vbus = ina.busVoltage();                // tension bus (V)
+  float cur  = ina.current();                   // courant (A) - NAN si INA absent
+
+  // --- Log serie ---
+  Serial.printf("T=%.2f degC | VBUS=%.3f V", tC, vbus);
+  if (!isnan(cur)) Serial.printf(" | I=%.3f A", cur);
+  Serial.println();
+
+  // --- Surveillance : comparaison aux seuils ---
+  bool alarme = false;
+  if (tC > SEUIL_TEMP_C) {
+    Serial.println("  !! ALARME temperature (seuil depasse)");
+    alarme = true;
+  }
+  if (!isnan(cur) && fabs(cur) > SEUIL_COURANT_A) {
+    Serial.println("  !! ALARME courant (seuil depasse)");
+    alarme = true;
+  }
+
+  // --- IHM : rouge + bip si alarme, vert sinon ---
+  if (alarme) {
+    hmi::ledGreen(false);
+    hmi::ledRed(true);
+    hmi::beep(120);
+  } else {
+    hmi::ledRed(false);
+    hmi::ledGreen(true);
+  }
+
+  delay(1000);
 }
