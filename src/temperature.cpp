@@ -44,11 +44,15 @@ void report(float inaDieC) {
                   tmp.deviceId());
   }
 
-  // 2. CTN
-  float t1 = ntc::readCelsius1();
-  float t2 = ntc::readCelsius2();
-  Serial.printf("    CTN1 (GPIO%d) raw=%d -> ", PIN_NTC_1, ntc::readRaw1()); printC("", t1);
-  Serial.printf("    CTN2 (GPIO%d) raw=%d -> ", PIN_NTC_2, ntc::readRaw2()); printC("", t2);
+  // 2. CTN (une seule lecture ADC par sonde : brute -> conversion)
+  int r1 = ntc::readRaw1();
+  int r2 = ntc::readRaw2();
+  float t1 = ntc::rawToCelsius(r1);
+  float t2 = ntc::rawToCelsius(r2);
+  if (isnan(t1)) Serial.printf("    CTN1 (GPIO%d) raw=%d -> n/a\n", PIN_NTC_1, r1);
+  else           Serial.printf("    CTN1 (GPIO%d) raw=%d -> %.2f degC\n", PIN_NTC_1, r1, t1);
+  if (isnan(t2)) Serial.printf("    CTN2 (GPIO%d) raw=%d -> n/a\n", PIN_NTC_2, r2);
+  else           Serial.printf("    CTN2 (GPIO%d) raw=%d -> %.2f degC\n", PIN_NTC_2, r2, t2);
 
   // 3. T_die INA237 (fournie par l'appelant)
   printC("T_die INA", inaDieC);

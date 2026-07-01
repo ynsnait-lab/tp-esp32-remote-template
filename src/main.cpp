@@ -5,6 +5,7 @@
 #include "hmi.h"
 #include "ina237.h"
 #include "temperature.h"
+#include "ntc.h"
 #include "mem.h"
 #include "alarm_logic.h"
 #include "ring_buffer.h"
@@ -106,6 +107,7 @@ void setup() {
 void loop() {
   // --- Mesures ---
   float tC   = temperature::tmp.temperature();  // TMP126 (degC)
+  float tNtc = ntc::readCelsius1();             // CTN 1 ambiante (degC) - NAN si hors plage
   float vbus = ina.busVoltage();                // tension bus (V)
   float cur  = ina.current();                   // courant (A) - NAN si INA absent
 
@@ -117,11 +119,12 @@ void loop() {
 
   // --- Log : historique en RAM + ligne CSV sur le port serie ---
   histTemp.push(tC);
-  char ligne[64];
-  formatLogLine(ligne, sizeof(ligne), millis(), tC, vbus,
-                isnan(cur) ? 0.0f : cur, static_cast<int>(niveau));
+  char ligne[80];
+  formatLogLine(ligne, sizeof(ligne), millis(), tC,
+                isnan(tNtc) ? 0.0f : tNtc, vbus,
+                isnan(cur)  ? 0.0f : cur, static_cast<int>(niveau));
   Serial.print("LOG,");
-  Serial.println(ligne);   // format : t_ms,temp,vbus,courant,niveau
+  Serial.println(ligne);   // format : t_ms,temp_tmp126,temp_ntc1,vbus,courant,niveau
 
   // --- IHM selon le niveau (cf. FSM) ---
   switch (niveau) {

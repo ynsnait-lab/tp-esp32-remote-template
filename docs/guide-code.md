@@ -40,11 +40,13 @@ flowchart TD
 ---
 
 ### 🎬 `main.cpp` — le chef d'orchestre
-**En clair :** au démarrage, lance la séquence de test de tous les blocs, l'un
-après l'autre, et écrit les résultats sur le câble série (qu'on lit sur le PC).
+**En clair :** au démarrage (`setup`), lance la séquence de test de tous les blocs,
+puis passe en **boucle de surveillance** (`loop`) : mesures → décision d'alarme →
+LED/buzzer → ligne de log.
 **Données clés :**
 - Liaison série **115200 bauds**
-- 4 étapes : [1] HMI · [2] I²C/INA237 · [3] Température · [4] Mémoire
+- Bring-up : [1] HMI · [2] I²C/INA237 · [3] Température · [4] Mémoire
+- Boucle : 1 mesure/s, seuils avertissement/critique, ligne `LOG,...` en CSV
 
 ---
 
@@ -115,5 +117,31 @@ fonctionne (écrit puis relit un bloc).
 
 ---
 
+### ⚖️ `alarm_logic.h` — le juge des seuils
+**En clair :** décide du niveau d'alarme (OK / avertissement / critique) en
+comparant une mesure à deux seuils. Fonction **pure** → testée sur PC.
+**Données clés :**
+- Seuils logiciels : température 40/55 °C, courant 8/10 A
+- (le TMP126 a aussi ses propres seuils matériels, 5/40 °C, relus par polling)
+
+---
+
+### 📚 `ring_buffer.h` — le carnet de mesures
+**En clair :** garde en mémoire les N dernières mesures (historique) ; quand il
+est plein, il écrase la plus ancienne. Fonction **pure** → testée sur PC.
+**Données clés :**
+- 64 dernières températures conservées en RAM, zéro allocation dynamique
+
+---
+
+### 🧾 `log_format.h` — l'écrivain du journal
+**En clair :** met en forme une ligne de log au format CSV, la même que celle
+émise sur le port série (`LOG,...`). Fonction **pure** → testée sur PC.
+**Données clés :**
+- Colonnes : `t_ms, temp_tmp126, temp_ntc1, vbus, courant, niveau`
+
+---
+
 > 📎 Références techniques détaillées : [registres.md](registres.md) (valeurs attendues
 > des capteurs) et [temperature.md](temperature.md) (sous-système température).
+> Tests unitaires : voir [../test/README.md](../test/README.md).

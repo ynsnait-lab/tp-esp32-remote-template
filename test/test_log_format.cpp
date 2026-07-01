@@ -13,15 +13,15 @@ static void check(bool cond, const char* msg) {
 }
 
 int main() {
-  char buf[64];
-  int n = formatLogLine(buf, sizeof(buf), 1000UL, 25.0f, 3.300f, 0.500f, 1);
+  char buf[80];
+  int n = formatLogLine(buf, sizeof(buf), 1000UL, 25.0f, 24.5f, 3.300f, 0.500f, 1);
 
-  check(strcmp(buf, "1000,25.00,3.300,0.500,1") == 0, "ligne CSV correcte");
+  check(strcmp(buf, "1000,25.00,24.50,3.300,0.500,1") == 0, "ligne CSV correcte (6 colonnes)");
   check(n == (int)strlen(buf), "valeur de retour = longueur ecrite");
 
-  // temperature negative + niveau critique
-  formatLogLine(buf, sizeof(buf), 42UL, -5.5f, 3.301f, -1.250f, 2);
-  check(strcmp(buf, "42,-5.50,3.301,-1.250,2") == 0, "gere valeurs negatives");
+  // temperatures negatives + niveau critique
+  formatLogLine(buf, sizeof(buf), 42UL, -5.5f, -6.25f, 3.301f, -1.250f, 2);
+  check(strcmp(buf, "42,-5.50,-6.25,3.301,-1.250,2") == 0, "gere valeurs negatives");
 
   printf("\n%s (%d echec(s))\n",
          fails == 0 ? "== TOUS LES TESTS PASSENT ==" : "== DES TESTS ECHOUENT ==", fails);
