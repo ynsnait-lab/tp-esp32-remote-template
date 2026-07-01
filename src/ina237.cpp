@@ -56,3 +56,35 @@ float INA237::current() {
   int16_t raw = (int16_t)read16(REG_CURRENT);
   return raw * _currentLsb;
 }
+
+// ADC_CONFIG (0x01) : MODE = Fh (continu bus + shunt + temperature),
+// temps de conversion 1052 us et moyennage x1 (valeur de reset 0xFB68,
+// ecrite explicitement pour un etat connu apres init).
+bool INA237::initAdc() {
+  return write16(REG_ADC_CONFIG, 0xFB68);
+}
+
+// SOVL : complement a 2, 5 uV/LSB (ADCRANGE = 0)
+void INA237::setShuntOverLimit(float volts) {
+  write16(REG_SOVL, (uint16_t)(int16_t)(volts / 5.0e-6f));
+}
+
+// BOVL / BUVL : non signes, 15 bits utiles, 3,125 mV/LSB
+void INA237::setBusOverLimit(float volts) {
+  write16(REG_BOVL, (uint16_t)(volts / 3.125e-3f) & 0x7FFF);
+}
+void INA237::setBusUnderLimit(float volts) {
+  write16(REG_BUVL, (uint16_t)(volts / 3.125e-3f) & 0x7FFF);
+}
+
+// TEMP_LIMIT : 125 m degC/LSB, champ sur les bits [15:4]
+void INA237::setTempLimit(float celsius) {
+  int16_t counts = (int16_t)(celsius / 0.125f);
+  write16(REG_TEMP_LIMIT, (uint16_t)(counts << 4));
+}
+
+// DIAG_ALRT : flags d'etat (mode transparent par defaut : un flag retombe
+// quand la condition disparait ; lecture par polling, ALERT non cablee).
+uint16_t INA237::diagAlert() {
+  return read16(REG_DIAG_ALRT);
+}

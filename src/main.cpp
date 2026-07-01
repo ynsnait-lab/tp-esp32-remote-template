@@ -87,7 +87,13 @@ void setup() {
   // [2] I2C + INA237
   scanI2C();
   float inaDie = testINA237();
-  ina.configureCurrent(/*maxCurrentA=*/10.0f, R_SHUNT_OHM);  // active la mesure de courant (R_shunt provisoire)
+  ina.configureCurrent(/*maxCurrentA=*/10.0f, R_SHUNT_OHM);  // active la mesure de courant
+  ina.initAdc();                                     // mode continu bus+shunt+temp (Ref #3)
+  // Seuils d'alarme materiels INA237 (Ref #5), alignes sur les seuils critiques :
+  ina.setShuntOverLimit(CUR_CRIT_A * R_SHUNT_OHM);   // sur-courant (via tension shunt)
+  ina.setBusOverLimit(5.5f);                         // bus > 5,5 V = anormal
+  ina.setBusUnderLimit(2.8f);                        // bus < 2,8 V = brown-out
+  ina.setTempLimit(60.0f);                           // die > 60 degC
 
   // [3] Sous-systeme temperature (TMP126 + CTN + recoupe avec T_die INA237)
   temperature::begin();
@@ -115,6 +121,15 @@ void loop() {
   AlarmLevel niveau = alarmLevelHigh(tC, TEMP_WARN_C, TEMP_CRIT_C);
   if (!isnan(cur)) {
     niveau = alarmWorst(niveau, alarmLevelHigh(fabs(cur), CUR_WARN_A, CUR_CRIT_A));
+  }
+
+  // --- Alarmes materielles INA237 : polling DIAG_ALRT (Ref #6, ALERT non cablee) ---
+  uint16_t diag = ina.diagAlert();
+  const uint16_t DIAG_FAULTS = INA237::DIAG_TMPOL | INA237::DIAG_SHNTOL |
+                               INA237::DIAG_BUSOL | INA237::DIAG_BUSUL;
+  if (diag & DIAG_FAULTS) {
+    Serial.printf("  !! DIAG_ALRT=0x%04X (alarme materielle INA237)\n", diag);
+    niveau = AlarmLevel::CRITICAL;
   }
 
   // --- Log : historique en RAM + ligne CSV sur le port serie ---
