@@ -6,6 +6,7 @@
 #include "ina237.h"
 #include "temperature.h"
 #include "mem.h"
+#include "alarm_logic.h"
 
 // =============================================================================
 //  Firmware de validation - carte "Projet M1 2024" (ESP32-PICO-D4)
@@ -19,10 +20,12 @@
 
 INA237 ina;
 
-// --- Seuils de surveillance (ajustables) ---
-static const float SEUIL_TEMP_C    = 35.0f;    // alarme si T depasse (degC)
-static const float SEUIL_COURANT_A = 8.0f;     // alarme si |I| depasse (A) - cf. config groupe 8000 mA
-static const float R_SHUNT_OHM     = 0.0005f;  // shunt X500 : PROVISOIRE, a confirmer
+// --- Seuils de surveillance (avertissement / critique) ---
+static const float TEMP_WARN_C  = 40.0f;    // avertissement temperature (degC)
+static const float TEMP_CRIT_C  = 55.0f;    // critique temperature
+static const float CUR_WARN_A   = 8.0f;     // avertissement courant (A) - cf. config groupe 8000 mA
+static const float CUR_CRIT_A   = 10.0f;    // critique courant
+static const float R_SHUNT_OHM  = 0.0005f;  // shunt X500 (valide par le groupe : 0,5 mOhm)
 
 static void scanI2C() {
   Serial.println("[2] I2C : scan du bus...");
@@ -106,25 +109,26 @@ void loop() {
   if (!isnan(cur)) Serial.printf(" | I=%.3f A", cur);
   Serial.println();
 
-  // --- Surveillance : comparaison aux seuils ---
-  bool alarme = false;
-  if (tC > SEUIL_TEMP_C) {
-    Serial.println("  !! ALARME temperature (seuil depasse)");
-    alarme = true;
-  }
-  if (!isnan(cur) && fabs(cur) > SEUIL_COURANT_A) {
-    Serial.println("  !! ALARME courant (seuil depasse)");
-    alarme = true;
+  // --- Niveau d'alarme (logique pure, testee unitairement) ---
+  AlarmLevel niveau = alarmLevelHigh(tC, TEMP_WARN_C, TEMP_CRIT_C);
+  if (!isnan(cur)) {
+    niveau = alarmWorst(niveau, alarmLevelHigh(fabs(cur), CUR_WARN_A, CUR_CRIT_A));
   }
 
-  // --- IHM : rouge + bip si alarme, vert sinon ---
-  if (alarme) {
-    hmi::ledGreen(false);
-    hmi::ledRed(true);
-    hmi::beep(120);
-  } else {
-    hmi::ledRed(false);
-    hmi::ledGreen(true);
+  // --- IHM selon le niveau (cf. FSM) ---
+  switch (niveau) {
+    case AlarmLevel::CRITICAL:
+      Serial.println("  !! ALARME CRITIQUE");
+      hmi::ledGreen(false); hmi::ledRed(true); hmi::beep(300);
+      break;
+    case AlarmLevel::WARNING:
+      Serial.println("  ! avertissement");
+      hmi::ledGreen(false); hmi::ledRed(true); hmi::beep(80);
+      break;
+    case AlarmLevel::OK:
+    default:
+      hmi::ledRed(false); hmi::ledGreen(true);
+      break;
   }
 
   delay(1000);
