@@ -6,26 +6,21 @@ capteurs — ça, ça se vérifie à la main sur la carte.
 ## Lancer les tests (depuis la racine du projet)
 
 ```bash
-# Conversion CTN (ADC -> degC)
-g++ -std=c++11 test/test_ntc_convert.cpp -o /tmp/test_ntc && /tmp/test_ntc
-
-# Logique d'alarme (OK / avertissement / critique)
-g++ -std=c++11 test/test_alarm_logic.cpp -o /tmp/test_alarm && /tmp/test_alarm
+g++ -std=c++11 test/test_ntc_convert.cpp -o /tmp/t && /tmp/t   # conversion CTN
+g++ -std=c++11 test/test_alarm_logic.cpp -o /tmp/t && /tmp/t   # logique d'alarme
+g++ -std=c++11 test/test_ring_buffer.cpp -o /tmp/t && /tmp/t   # buffer circulaire
+g++ -std=c++11 test/test_log_format.cpp  -o /tmp/t && /tmp/t   # format de log CSV
 ```
 
-Sortie attendue : `== TOUS LES TESTS PASSENT ==` (code de retour 0).
+Sortie attendue : `== TOUS LES TESTS PASSENT ==` (code de retour 0) pour chacun.
 
 ## Ce qui est testé
-**Conversion CTN** (`ntc_convert.h`) :
-- `raw = 2048` (point milieu) → ≈ 25 °C
-- sens de variation (raw plus faible → plus chaud)
-- bornes 0 / 4095 → `NAN` (circuit ouvert / court-circuit)
-
-**Logique d'alarme** (`alarm_logic.h`) :
-- valeur < seuil avertissement → `OK`
-- entre les deux seuils → `WARNING`
-- ≥ seuil critique → `CRITICAL`
-- combinaison de deux niveaux → on garde le plus grave
+| Test | En-tête pur | Cas couverts |
+|---|---|---|
+| `test_ntc_convert` | `ntc_convert.h` | point milieu ≈ 25 °C, sens de variation, bornes → NAN |
+| `test_alarm_logic` | `alarm_logic.h` | OK / avertissement / critique, seuils, combinaison |
+| `test_ring_buffer` | `ring_buffer.h` | remplissage, plafond de capacité, écrasement du plus ancien |
+| `test_log_format` | `log_format.h` | ligne CSV exacte, valeurs négatives |
 
 Les tests incluent directement les en-têtes `src/*.h` (fonctions pures, sans
 Arduino) : c'est le **même code** que celui exécuté sur la carte.

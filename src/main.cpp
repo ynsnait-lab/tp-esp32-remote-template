@@ -7,6 +7,8 @@
 #include "temperature.h"
 #include "mem.h"
 #include "alarm_logic.h"
+#include "ring_buffer.h"
+#include "log_format.h"
 
 // =============================================================================
 //  Firmware de validation - carte "Projet M1 2024" (ESP32-PICO-D4)
@@ -19,6 +21,9 @@
 // =============================================================================
 
 INA237 ina;
+
+// Historique des dernieres temperatures (log en RAM, sans allocation dynamique).
+static RingBuffer<float, 64> histTemp;
 
 // --- Seuils de surveillance (avertissement / critique) ---
 static const float TEMP_WARN_C  = 40.0f;    // avertissement temperature (degC)
@@ -104,16 +109,19 @@ void loop() {
   float vbus = ina.busVoltage();                // tension bus (V)
   float cur  = ina.current();                   // courant (A) - NAN si INA absent
 
-  // --- Log serie ---
-  Serial.printf("T=%.2f degC | VBUS=%.3f V", tC, vbus);
-  if (!isnan(cur)) Serial.printf(" | I=%.3f A", cur);
-  Serial.println();
-
   // --- Niveau d'alarme (logique pure, testee unitairement) ---
   AlarmLevel niveau = alarmLevelHigh(tC, TEMP_WARN_C, TEMP_CRIT_C);
   if (!isnan(cur)) {
     niveau = alarmWorst(niveau, alarmLevelHigh(fabs(cur), CUR_WARN_A, CUR_CRIT_A));
   }
+
+  // --- Log : historique en RAM + ligne CSV sur le port serie ---
+  histTemp.push(tC);
+  char ligne[64];
+  formatLogLine(ligne, sizeof(ligne), millis(), tC, vbus,
+                isnan(cur) ? 0.0f : cur, static_cast<int>(niveau));
+  Serial.print("LOG,");
+  Serial.println(ligne);   // format : t_ms,temp,vbus,courant,niveau
 
   // --- IHM selon le niveau (cf. FSM) ---
   switch (niveau) {
