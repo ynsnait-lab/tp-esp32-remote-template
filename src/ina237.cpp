@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include "ina237.h"
+#include "ina237_cal.h"
 
 // --- Acces registres (16 bits, MSB en premier) ------------------------------
 uint16_t INA237::read16(uint8_t reg) {
@@ -45,10 +46,15 @@ float INA237::dieTemperature() {
 }
 
 // SHUNT_CAL = 819,2e6 * CURRENT_LSB * R_shunt   (ADCRANGE = 0)
+// Calcul delegue a ina237_cal.h (fonction pure, validee en test PC).
 void INA237::configureCurrent(float maxCurrentA, float rShuntOhm) {
-  _currentLsb = maxCurrentA / 32768.0f;            // 2^15
-  uint16_t cal = (uint16_t)(819.2e6f * _currentLsb * rShuntOhm);
-  write16(REG_SHUNT_CAL, cal & 0x7FFF);            // 15 bits
+  uint16_t cal = ina237ShuntCal(maxCurrentA, rShuntOhm, /*adcRange1=*/false);
+  if (cal == 0) {                                  // parametres invalides
+    _currentLsb = 0.0f;                            // current() renverra NAN
+    return;
+  }
+  _currentLsb = ina237CurrentLsb(maxCurrentA);
+  write16(REG_SHUNT_CAL, cal);
 }
 
 float INA237::current() {
