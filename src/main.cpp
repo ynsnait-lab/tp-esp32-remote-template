@@ -136,10 +136,15 @@ void loop() {
   }
 
   // --- Alarmes materielles INA237 : polling DIAG_ALRT (Ref #6, ALERT non cablee) ---
+  // NB banc/labo : la ligne puissance est souvent debranchee -> VBUS ~ 0 V et
+  // BUSUL (sous-tension bus) reste leve en permanence -> fausse alarme critique
+  // + buzzer continu. BUSUL n'est donc pris en compte que si la ligne est
+  // reellement alimentee (VBUS > 0,5 V). En production (36 V present), la
+  // detection de sous-tension reste pleinement active.
   uint16_t diag = ina.diagAlert();
-  const uint16_t DIAG_FAULTS = INA237::DIAG_TMPOL | INA237::DIAG_SHNTOL |
-                               INA237::DIAG_BUSOL | INA237::DIAG_BUSUL;
-  if (diag & DIAG_FAULTS) {
+  uint16_t faults = INA237::DIAG_TMPOL | INA237::DIAG_SHNTOL | INA237::DIAG_BUSOL;
+  if (vbus > 0.5f) { faults |= INA237::DIAG_BUSUL; }
+  if (diag & faults) {
     Serial.printf("  !! DIAG_ALRT=0x%04X (alarme materielle INA237)\n", diag);
     niveau = AlarmLevel::CRITICAL;
   }
