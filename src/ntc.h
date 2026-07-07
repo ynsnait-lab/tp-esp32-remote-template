@@ -5,13 +5,11 @@
 //  Montage (schema hmi.SchDoc) : 3V3 -- R604(10k) -- noeud -- NTC -- GND,
 //  avec R605(5,1k)+2x47nF en filtre RC vers l'ADC.
 //
-//  Conversion RATIOMETRIQUE (la Vref s'annule) :
-//     R_ntc = R_pullup * raw / (ADC_MAX - raw)
-//     1/T   = 1/T0 + (1/Beta) * ln(R_ntc / R0)      (T0=298,15 K, R0=10k)
+//  Conversion : table de correspondance ADC -> degC de l'aide de cours
+//  (integre le comportement reel de l'ADC ESP32) + interpolation lineaire.
+//  Le modele Beta theorique reste disponible en recoupe (cf. ntc_convert.h).
 //
 //  ATTENTION : GPIO25/26 sont sur ADC2 -> indisponible si WiFi/BT actif.
-//  L'ADC de l'ESP32 est non lineaire -> valeur indicative (a affiner par
-//  calibration si besoin de precision).
 // =============================================================================
 namespace ntc {
   void  begin();
